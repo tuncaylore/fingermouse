@@ -10,11 +10,15 @@ Windows 10/11 üzerinde **web kamerasıyla eli takip edip fareyi kontrol eden** 
 - İşaret parmağıyla imleç kontrolü; sol/sağ tık, sürükle-bırak ve kaydırma.
 - Titremeyi azaltan hareket yumuşatma ve parmak birleştirme eşikleri.
 - Kullanıcıya özel hareket eğitimi, örnek toplama ve tanıma doğrulaması.
+- T menüsünde ayrı sol çift tıklama hareketi eğitimi (**6**).
 - Açık onayla etkinleştirilen pencere kapatma hareketi (Alt+F4).
 - Kamera seçimi, canlı el eklemleri ve FPS göstergesi.
 - Duraklatma, el kaybolunca fareyi bırakma ve ekran köşelerinde güvenlik durdurması.
 - Python kontrolü, gerektiğinde kurulum, yerel sanal ortam ve otomatik paket kurulumu.
 - Kamera görüntülerinin ve hareket eğitiminin yerel işlenmesi.
+- Yeni kamera karesi için bildirim tabanlı bekleme; gereksiz kare kopyalama ve tekrar işleme yok.
+
+[Sürüm notları](CHANGELOG.md) · [GitHub sürümleri](https://github.com/tuncaylore/fingermouse/releases)
 
 ## Tek tıkla çalıştırma
 
@@ -68,6 +72,7 @@ run.bat --help
 | **3** | Pencereyi kapat hareketini tanımla (onay gerekir) |
 | **4** | Tüm eğitimi sil (iki kez basın) |
 | **5** | Pencere kapatmayı devre dışı bırak |
+| **6** | Sol çift tıklama hareketini tanımla |
 | **X** | Özel hareketleri aç / kapat |
 
 Bir eylem seçtiğinizde kamera eğitim moduna geçer. Geri sayımı bekleyin, hareketi yapıp yaklaşık 2 saniye sabit tutun. Yeterli örnek yoksa veya hareket kararsızsa uygulama yeniden denemenizi ister. Yeterli örnek toplanınca doğrulama aşaması başlar; aynı hareketi tekrar yaptığınızda tanınırsa eğitim tamamlanır ve `gestures.json` dosyasına kaydedilir. Eğitim verisi bilgisayarınızdan çıkmaz.
@@ -75,6 +80,12 @@ Bir eylem seçtiğinizde kamera eğitim moduna geçer. Geri sayımı bekleyin, h
 - **ENTER:** Başarısız eğitimi tekrar dene / tamamlanan eğitimden menüye dön.
 - **R:** Başarısız eğitimde yalnızca seçilen eylemi sıfırla.
 - **ESC:** Eğitimi iptal et ve menüye dön.
+
+### Sol çift tıklama
+
+**T → 6** ile sol tık ve sürüklemeden farklı bir el hareketi öğretin. Hareket çok benzerse eğitim kabul edilmez. Doğrulandıktan sonra bu hareketi yaptığınızda iki sol tık gönderilir; hareketi sabit tutmak tekrar tekrar tıklamaz. Yeniden tetiklemek için önce hareketi bırakıp tekrar yapın.
+
+İki tık arasındaki hedef süre 100 ms'dir; ikinci tık ilk uygun kamera karesinde gönderilir, kamera döngüsü bekletilmez. Arada el kaybolursa, duraklatırsanız, menüyü açarsanız veya güvenlik durdurması olursa bekleyen ikinci tık iptal edilir. Mevcut sol tık ve sürükleme davranışı değişmez; eski eğitimler kullanılmaya devam eder.
 
 > **Güvenlik:** Pencereyi kapatma eylemi varsayılan olarak kapalıdır ve yalnızca açık onayla etkinleşir. Hatalı tanıma durumunda menüden **5** ile hemen devre dışı bırakabilir veya **X** ile tüm özel hareketleri kapatabilirsiniz.
 
@@ -85,6 +96,7 @@ Bir eylem seçtiğinizde kamera eğitim moduna geçer. Geri sayımı bekleyin, h
 - **Kamera açılmıyor:** Windows Ayarlar > Gizlilik ve güvenlik > Kamera bölümünden masaüstü uygulamalarına izin verin; Zoom/Teams/kamera kullanan uygulamaları kapatın.
 - **Harici kamera seçme:** `run.bat` kısayolunun hedefinin sonuna ` 1` ekleyin veya Komut İstemi'nden `run.bat 1` çalıştırın.
 - **Python / paket kurulumu hata veriyor:** Python 3.12 (64-bit) kullanın. İnternet, pip erişimi ve güvenlik duvarını kontrol edin.
+- **OpenCV paket çakışması:** Başlatıcı eski `.venv` içindeki `opencv-python` ve headless varyantlarını tespit eder, kaldırır ve paketleri yeniden kurar. Bu tek seferlik onarım internet gerektirir; `pip check` tek başına bu çakışmayı bulamaz.
 - **Aşırı tıklama:** Başparmağınızı işaret/orta parmak ucundan uzak tutun; parmakları kameraya net gösterin.
 - **Fare köşeye giderse:** PyAutoGUI güvenliği kontrolü duraklatır. Fiziksel fareyi ekran köşesinden uzaklaştırıp SPACE ile yeniden etkinleştirin.
 - **Birden çok ekran:** İlk sürüm öncelikle ana ekranı kontrol eder.
@@ -114,7 +126,7 @@ Bir eylem seçtiğinizde kamera eğitim moduna geçer. Geri sayımı bekleyin, h
 .venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-GitHub Actions, Windows üzerinde Python 3.10–3.13 için kurulum, çevrimdışı başlatıcı tekrar kullanımı ve mantık testlerini çalıştırır. Canlı kamera ve gerçek fare hareketleri CI'da test edilmez; bunlar son kullanıcı Windows bilgisayarında doğrulanmalıdır.
+GitHub Actions, Windows üzerinde Python 3.10–3.13 için kurulum, çevrimdışı başlatıcı tekrar kullanımı, eski OpenCV çakışmasının onarımı, hareket eğitimi ve sahte kamera/fare ile çalışma döngüsü testlerini çalıştırır. Canlı kamera ve gerçek fare hareketleri CI'da test edilmez; bunlar son kullanıcı Windows bilgisayarında doğrulanmalıdır.
 
 ## Katkı ve lisans
 

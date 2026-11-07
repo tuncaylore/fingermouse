@@ -56,6 +56,12 @@ CAMERA_FPS = 60
 CUSTOM_HOLD_FRAMES = 4
 CUSTOM_CONFIDENCE = 0.25
 CUSTOM_COOLDOWN = 0.9
+DOUBLE_CLICK_INTERVAL = 0.1
+TRAINING_KEYS = {
+    ord("1"): "left_click",
+    ord("2"): "right_click",
+    ord("6"): "double_click",
+}
 CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 4),
     (0, 5), (5, 6), (6, 7), (7, 8),
@@ -116,7 +122,9 @@ class LatestFrameCamera:
         self._ok = False
         self._sequence = 0
         self._last_sequence = 0
-        self._lock = threading.Lock()
+        self._condition = threading.Condition()
+        self._read_failed = False
+        self._error = None
         self._running = True
         self._thread = threading.Thread(target=self._reader, daemon=True)
         self._thread.start()
@@ -125,38 +133,44 @@ class LatestFrameCamera:
         while self._running:
             try:
                 ok, frame = self.capture.read()
-            except Exception:
-                ok, frame = False, None
-            with self._lock:
+            except Exception as exc:
+                with self._condition:
+                    self._error = exc
+                    self._condition.notify_all()
+                return
+            with self._condition:
                 self._ok = ok
+                self._read_failed = not ok
                 if ok:
                     self._frame = frame
                     self._sequence += 1
                 else:
                     self._frame = None
+                self._condition.notify_all()
             if not ok:
                 time.sleep(0.01)
 
     def read(self, timeout=1.0):
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            with self._lock:
-                if (
-                    self._ok
-                    and self._frame is not None
-                    and self._sequence != self._last_sequence
-                ):
-                    self._last_sequence = self._sequence
-                    return True, self._frame.copy()
-            time.sleep(0.002)
-        with self._lock:
-            if self._ok and self._frame is not None:
+        with self._condition:
+            ready = self._condition.wait_for(
+                lambda: self._sequence != self._last_sequence
+                or self._read_failed
+                or self._error is not None
+                or not self._running,
+                timeout=timeout,
+            )
+            if self._error is not None:
+                raise RuntimeError("Kamera okuma isleminde hata olustu.") from self._error
+            if ready and self._running and self._ok and self._frame is not None:
                 self._last_sequence = self._sequence
-                return True, self._frame.copy()
+                # Capture publishes new arrays; main() flips into a separate array.
+                return True, self._frame
         return False, None
 
     def release(self):
-        self._running = False
+        with self._condition:
+            self._running = False
+            self._condition.notify_all()
         self._thread.join(timeout=1.0)
         self.capture.release()
 
@@ -238,11 +252,12 @@ def draw_menu(frame, runtime, model, message=""):
         f"[{state('close_window')}] [{model.count('close_window')}]",
         "4) Tum egitimi sil  (iki kez bas)",
         "5) Pencere kapatmayi devre disi birak",
+        f"6) Sol Cift Tik  [{state('double_click')}] [{model.count('double_click')} ornek]",
         f"X) Ozel hareketler: {'ACIK' if runtime.enabled else 'KAPALI'}",
         "T / ESC) Menuyu kapat",
     ]
     for index, line in enumerate(lines):
-        cv2.putText(frame, line, (80, 170 + index * 31),
+        cv2.putText(frame, line, (80, 166 + index * 27),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.53, (225, 232, 241), 1, cv2.LINE_AA)
     if message:
         cv2.putText(frame, message, (80, 388),
@@ -294,8 +309,10 @@ class MouseController:
         self.scroll_accumulator = 0.0
         self.last_mode = None
         self.last_update = None
+        self.pending_double_click = None
 
     def release(self):
+        self.pending_double_click = None
         if self.dragging:
             try:
                 pyautogui.mouseUp(button="left")
@@ -315,10 +332,19 @@ class MouseController:
         self.mouse.check_failsafe()
         if action == "left_click":
             pyautogui.click(button="left")
+        elif action == "double_click":
+            pyautogui.click(button="left")
+            self.pending_double_click = time.monotonic() + DOUBLE_CLICK_INTERVAL
         elif action == "right_click":
             pyautogui.click(button="right")
         elif action == "close_window":
             pyautogui.hotkey("alt", "f4")
+
+    def complete_pending_click(self, now):
+        if self.pending_double_click is not None and now >= self.pending_double_click:
+            self.mouse.check_failsafe()
+            self.pending_double_click = None
+            pyautogui.click(button="left")
 
     def _delta_time(self):
         now = time.monotonic()
@@ -614,11 +640,14 @@ def main():
                     status = "DURAKLATILDI"
                 elif landmarks is not None:
                     try:
+                        controller.complete_pending_click(current)
                         custom_action = custom.update(landmarks, current)
                         if custom_action is not None:
                             status = f"OZEL: {ACTION_LABELS[custom_action]}"
                             if custom_action == "close_window" and not custom.close_armed:
                                 status = "PENCERE KAPATMA: KAPALI"
+                        elif controller.pending_double_click is not None:
+                            status = "SOL CIFT TIK"
                         else:
                             status = controller.update(landmarks)
                     except pyautogui.FailSafeException:
@@ -686,14 +715,8 @@ def main():
                     if reset_confirm and key != ord("4"):
                         reset_confirm = False
                         menu_message = ""
-                    if key == ord("1"):
-                        training = TrainingSession(model, "left_click")
-                        menu_open = False
-                        paused = False
-                        controller.release()
-                        custom.reset()
-                    elif key == ord("2"):
-                        training = TrainingSession(model, "right_click")
+                    if key in TRAINING_KEYS:
+                        training = TrainingSession(model, TRAINING_KEYS[key])
                         menu_open = False
                         paused = False
                         controller.release()

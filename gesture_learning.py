@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from math import sqrt
 from pathlib import Path
 
 import numpy as np
@@ -10,8 +11,9 @@ ACTION_LABELS = {
     "left_click": "Sol Tik",
     "right_click": "Sag Tik",
     "close_window": "Pencereyi Kapat",
+    "double_click": "Sol Cift Tik",
 }
-ACTION_ORDER = ("left_click", "right_click", "close_window")
+ACTION_ORDER = ("left_click", "right_click", "close_window", "double_click")
 
 MIN_SAMPLES = 15
 MAX_SPREAD = 0.55
@@ -188,7 +190,8 @@ class GestureModel:
             if stats is None:
                 continue
             centroid, radius, _ = stats
-            normalized = float(np.linalg.norm(vector - centroid)) / radius
+            delta = vector - centroid
+            normalized = sqrt(float(np.dot(delta, delta))) / radius
             scored.append((normalized, action))
         if not scored:
             return None, 0.0, 0.0

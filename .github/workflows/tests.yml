@@ -29,6 +29,13 @@ jobs:
         env:
           PIP_NO_INDEX: "1"
         run: run.bat --help
+      - name: Simulate legacy OpenCV conflict
+        run: .\.venv\Scripts\python.exe -c "import subprocess, sys; from importlib.metadata import version; subprocess.run([sys.executable, '-m', 'pip', 'install', '--only-binary=:all:', '--no-deps', 'opencv-python==' + version('opencv-contrib-python')], check=True)"
+      - name: Repair legacy OpenCV conflict
+        shell: cmd
+        run: run.bat --help
+      - name: Check single OpenCV distribution
+        run: .\.venv\Scripts\python.exe -c "from importlib.metadata import distributions; names = {d.metadata['Name'].lower() for d in distributions() if d.metadata['Name'].lower().startswith('opencv')}; assert names == {'opencv-contrib-python'}, names"
       - name: Check selected Python version
         run: .\.venv\Scripts\python.exe -c "import sys; assert '.'.join(map(str, sys.version_info[:2])) == '${{ matrix.python-version }}'"
       - name: Check dependency consistency

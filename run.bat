@@ -33,24 +33,36 @@ if errorlevel 1 goto :error
 
 :packages
 echo [2/4] Sanal ortam hazir.
+set "PIP_REINSTALL="
 "%VENV_PYTHON%" -m pip --version >nul 2>&1
 if errorlevel 1 (
   "%VENV_PYTHON%" -m ensurepip --upgrade
   if errorlevel 1 goto :error
 )
+"%VENV_PYTHON%" -c "from importlib.metadata import distributions; names={d.metadata['Name'].lower() for d in distributions()}; assert not names.intersection({'opencv-python', 'opencv-python-headless', 'opencv-contrib-python-headless'})" >nul 2>&1
+if errorlevel 1 goto :repair_opencv
 if not exist ".venv\requirements.installed.txt" goto :install_packages
 fc /b "requirements.txt" ".venv\requirements.installed.txt" >nul 2>&1
 if errorlevel 1 goto :install_packages
 "%VENV_PYTHON%" -c "import cv2, mediapipe, pyautogui, numpy; assert hasattr(mediapipe.tasks.vision, 'HandLandmarker')" >nul 2>&1
-if errorlevel 1 goto :install_packages
+if errorlevel 1 goto :repair_packages
 "%VENV_PYTHON%" -m pip check
-if errorlevel 1 goto :install_packages
+if errorlevel 1 goto :repair_packages
 echo [3/4] Paketler hazir. Yeniden indirme gerekmiyor.
 goto :launch
 
+:repair_opencv
+echo [3/4] Cakisan OpenCV paketleri bulundu. Yerel ortam onariliyor...
+"%VENV_PYTHON%" -m pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python-headless
+if errorlevel 1 goto :error
+
+:repair_packages
+echo [3/4] Paket kurulumu onariliyor. Internet gerekli...
+set "PIP_REINSTALL=--force-reinstall"
+
 :install_packages
 echo [3/4] Gerekli paketler yukleniyor. Internet gerekli...
-"%VENV_PYTHON%" -m pip install --disable-pip-version-check -r "requirements.txt"
+"%VENV_PYTHON%" -m pip install --disable-pip-version-check --only-binary=mediapipe,opencv-contrib-python,numpy %PIP_REINSTALL% -r "requirements.txt"
 if errorlevel 1 goto :error
 "%VENV_PYTHON%" -m pip check
 if errorlevel 1 goto :error

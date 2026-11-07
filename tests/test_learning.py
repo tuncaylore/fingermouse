@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from gesture_learning import MIN_SAMPLES, GestureModel
 
@@ -88,6 +90,45 @@ class GestureModelTests(unittest.TestCase):
                 base_vector(), actions=loaded.validated_actions()
             )
             self.assertEqual(action, "left_click")
+
+    def test_double_click_round_trip_preserves_old_actions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "gestures.json"
+            model = GestureModel(path)
+            actions = ("left_click", "right_click", "close_window", "double_click")
+            for index, action in enumerate(actions):
+                fill(model, action, base_vector(index))
+                model.mark_validated(action)
+            model.save()
+            loaded = GestureModel(path)
+            self.assertEqual(loaded.validated_actions(), list(actions))
+            for index, action in enumerate(actions):
+                self.assertEqual(loaded.predict(base_vector(index))[0], action)
+            loaded.clear("double_click")
+            self.assertEqual(loaded.validated_actions(), list(actions[:-1]))
+
+    def test_optimized_distances_match_previous_norm(self):
+        model = GestureModel()
+        for index, action in enumerate(("left_click", "right_click", "double_click")):
+            fill(model, action, base_vector(index * 0.2))
+        vectors = [base_vector(offset) for offset in (0.0, 0.001, 0.1, 0.2, 0.4, 20.0)]
+        for vector in vectors:
+            array = np.asarray(vector, dtype=np.float32)
+            for action in model.trained_actions():
+                centroid, radius, _ = model._stats_for(action)
+                delta = array - centroid
+                previous = float(np.linalg.norm(delta)) / radius
+                optimized = float(np.dot(delta, delta)) ** 0.5 / radius
+                self.assertAlmostEqual(previous, optimized, delta=max(1e-6, previous * 1e-6))
+
+    def test_prediction_cache_invalidates_after_retraining(self):
+        model = GestureModel()
+        fill(model, "double_click", base_vector())
+        model.predict(base_vector())
+        model.clear("double_click")
+        fill(model, "double_click", base_vector(2.0))
+        self.assertIsNone(model.predict(base_vector())[0])
+        self.assertEqual(model.predict(base_vector(2.0))[0], "double_click")
 
 
 if __name__ == "__main__":
