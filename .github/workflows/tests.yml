@@ -1,0 +1,39 @@
+name: Windows tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          architecture: x64
+          cache: pip
+      - name: Check clean launcher setup
+        shell: cmd
+        run: run.bat --help
+      - name: Check offline launcher reuse
+        shell: cmd
+        env:
+          PIP_NO_INDEX: "1"
+        run: run.bat --help
+      - name: Check selected Python version
+        run: .\.venv\Scripts\python.exe -c "import sys; assert '.'.join(map(str, sys.version_info[:2])) == '${{ matrix.python-version }}'"
+      - name: Check dependency consistency
+        run: .\.venv\Scripts\python.exe -m pip check
+      - name: Compile application
+        run: .\.venv\Scripts\python.exe -m py_compile fingermouse.py gesture_learning.py gesture_math.py
+      - name: Test gesture logic
+        run: .\.venv\Scripts\python.exe -m unittest discover -s tests -v
