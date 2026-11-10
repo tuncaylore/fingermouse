@@ -88,16 +88,25 @@ if not defined PYTHON_EXE (
   python -c "import sys; assert (3,10) <= sys.version_info[:2] <= (3,13) and sys.maxsize > 2**32" >nul 2>&1
   if not errorlevel 1 set "PYTHON_EXE=python"
 )
-for %%V in (312 311 313 310) do (
-  if not defined PYTHON_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe" (
-    "%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe" -c "import sys; assert (3,10) <= sys.version_info[:2] <= (3,13) and sys.maxsize > 2**32" >nul 2>&1
-    if not errorlevel 1 set PYTHON_EXE="%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe"
-  )
-)
+
+:: 1. Windows Py Launcher Kontrolü (En baştan dene)
 for %%V in (3.12 3.11 3.13 3.10) do (
   if not defined PYTHON_EXE (
     py -%%V -c "import sys; assert (3,10) <= sys.version_info[:2] <= (3,13) and sys.maxsize > 2**32" >nul 2>&1
-    if not errorlevel 1 set "PYTHON_EXE=py -%%V"
+    if not errorlevel 1 set PYTHON_EXE=py -%%V
+  )
+)
+
+:: 2. Yeni ve Farklı Kurulum Yolları Kontrolü (AppData, Program Files, Python312-64)
+for %%V in (312 311 313 310) do (
+  if not defined PYTHON_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe" (
+    set PYTHON_EXE="%LOCALAPPDATA%\Programs\Python\Python%%V\python.exe"
+  )
+  if not defined PYTHON_EXE if exist "%ProgramFiles%\Python%%V\python.exe" (
+    set PYTHON_EXE="%ProgramFiles%\Python%%V\python.exe"
+  )
+  if not defined PYTHON_EXE if exist "%LOCALAPPDATA%\Programs\Python\Python%%V-64\python.exe" (
+    set PYTHON_EXE="%LOCALAPPDATA%\Programs\Python\Python%%V-64\python.exe"
   )
 )
 exit /b 0
