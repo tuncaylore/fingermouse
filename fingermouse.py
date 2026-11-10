@@ -407,8 +407,8 @@ class MouseController:
             current_y = (landmarks[INDEX_TIP].y + landmarks[MIDDLE_TIP].y) / 2
             if self.scroll_previous_y is not None:
                 delta_y = self.scroll_previous_y - current_y
-                if abs(delta_y) < 0.22:
-                    self.scroll_accumulator += delta_y * 38
+                if abs(delta_y) < 0.40:
+                    self.scroll_accumulator += delta_y * 1500
                     steps = int(self.scroll_accumulator)
                     if steps:
                         pyautogui.scroll(steps)
