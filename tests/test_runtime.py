@@ -1,5 +1,6 @@
 import queue
 import sys
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -71,6 +72,25 @@ class CameraTests(unittest.TestCase):
     def test_reports_failed_read(self):
         self.capture.frames.put(None)
         self.assertEqual(self.camera.read(), (False, None))
+
+    def test_failed_read_waits_for_next_frame(self):
+        frame = np.zeros((2, 2, 3), dtype=np.uint8)
+        self.capture.frames.put(frame)
+        ok, received = self.camera.read(timeout=1.0)
+        self.assertTrue(ok)
+        self.assertIs(received, frame)
+        self.capture.frames.put(None)
+        deadline = time.monotonic() + 1.0
+        while self.camera._ok is not False and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertIs(self.camera._ok, False)
+        start = time.monotonic()
+        self.assertEqual(self.camera.read(timeout=0.2), (False, None))
+        self.assertGreaterEqual(time.monotonic() - start, 0.15)
+        self.capture.frames.put(frame)
+        ok, received = self.camera.read(timeout=1.0)
+        self.assertTrue(ok)
+        self.assertIs(received, frame)
 
 
 class DoubleClickTests(unittest.TestCase):
